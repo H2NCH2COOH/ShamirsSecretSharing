@@ -2,12 +2,12 @@
 <head>
    <title>Shamir's Secret Sharing: Encode</title>
    <meta charset="UTF-8" />
+   <script src="/qrcode.min.js"></script>
 </head>
 <body>
    <h1>Encode a secret using Shamir's Secret Sharing</h1>
    <p>
       <textarea rows="20" cols="80" placeholder="Secret in Base64" id="secret"></textarea>
-      <button id="secret-scan">Scan from QR</button>
    </p>
    <p>
       Number of shares:
@@ -170,9 +170,24 @@
 
          document.getElementById("result").innerHTML = "";
          for (let s of shares) {
+            const txt = s[0] + "|" + bitob64(s[1]);
+            const id = "result-qr-" + s[0];
             document.getElementById("result").innerHTML += [
-               "<p>", s[0], "|", bitob64(s[1]), "</p>"
+               "<p>",
+                  txt,
+                  "<br />",
+                  "<div id=\"", id, "\"></div>",
+               "</p>"
             ].join("");
+         }
+         for (let s of shares) {
+            const txt = s[0] + "|" + bitob64(s[1]);
+            const id = "result-qr-" + s[0];
+            new QRCode(document.getElementById(id), {
+               text: txt,
+               width: 500,
+               height: 500
+            });
          }
       }
    </script>
