@@ -1,0 +1,194 @@
+<html>
+<head>
+    <title>Shamir's Secret Sharing: Decode</title>
+    <meta charset="UTF-8" />
+</head>
+<body>
+    <h1>Decode a secret using Shamir's Secret Sharing</h1>
+    <p>
+        <textarea rows="20" cols="80" placeholder="A share in Base64" id="new-share"></textarea>
+    </p>
+    <p>
+        <button id="add-share" onclick="addShare()">Add Share</button>
+        <button id="clear-share" onclick="clearShares()">Clear Shares</button>
+        <button id="decode" onclick="decode()">Decode</button>
+    </p>
+    <p id="shares" />
+    <hr />
+    <p id="secret" />
+
+    <script>
+        var shares = [];
+        function clearShares() {
+            shares = [];
+            document.getElementById("shares").innerHTML = "";
+            document.getElementById("secret").innerHTML = "";
+        }
+
+        function b64tobi(str) {
+            try {
+                const binStr = atob(str);
+                var rst = 0n;
+                for (let i = 0; i < binStr.length; ++i) {
+                    rst = rst * 256n;
+                    rst = rst + BigInt(binStr.charCodeAt(i));
+                }
+                return rst;
+            } catch {
+                return null;
+            }
+        }
+
+        function bitob64(bi) {
+            if (bi == 0) {
+                return btoa([String.fromCharCode(0)]);
+            }
+
+            var bs = [];
+            while (bi > 0n) {
+                const b = bi % 256n;
+                const s = String.fromCharCode(Number(b));
+                bs.unshift(s);
+                bi = bi / 256n;
+            }
+
+            return btoa(bs.join(""));
+        }
+
+        function parseShare(str) {
+            try {
+                const ps = str.split("|");
+                if (ps.length != 2) {
+                    alert("Invalid share format");
+                    return null;
+                }
+
+                const x = parseInt(ps[0]);
+                if (isNaN(x) || x < 1) {
+                    alert("Invalid X");
+                    return null;
+                }
+
+                const y = b64tobi(ps[1]);
+                if (y === null) {
+                    alert("Invalid Y");
+                    return null;
+                }
+
+                return [BigInt(x), y];
+            } catch {
+                return null;
+            }
+        }
+
+        function addShare() {
+            const share = parseShare(document.getElementById("new-share").value.trim());
+            if (share === null) {
+                return;
+            }
+
+            for (let s of shares) {
+                if (share[0] == s[0]) {
+                    alert("Share already exists");
+                    return;
+                }
+            }
+
+            shares.push(share);
+            document.getElementById("shares").innerHTML += [
+                "<p>",
+                    share[0], "|", bitob64(share[1]),
+                "</p>"
+            ].join("");
+        }
+
+        function abs(a) {
+            if (a >= 0n) {
+                return a;
+            } else {
+                return -a;
+            }
+        }
+
+        function gcd(a, b) {
+            while (b != 0n) {
+                const t = b;
+                b = a % b;
+                a = t;
+            }
+
+            return a;
+        }
+
+        function lcm(a, b) {
+            return a * b / gcd(a, b);
+        }
+
+        function BigR(bi) {
+            return [bi, 1n];
+        }
+
+        function minusBigR(a) {
+            return [-a[0], a[1]];
+        }
+
+        function invBigR(a) {
+            if (a[0] >= 0n) {
+                return [a[1], a[0]];
+            } else {
+                return [-a[1], -a[0]];
+            }
+        }
+
+        function addBigR(a, b) {
+            const d = lcm(a[1], b[1]);
+            const n = (a[0] * d / a[1]) + (b[0] * d / b[1]);
+            const cd = gcd(d, abs(n));
+            return [n / cd, d / cd];
+        }
+
+        function subBigR(a, b) {
+            return addBigR(a, minusBigR(b));
+        }
+
+        function multBigR(a, b) {
+            const d = a[1] * b[1];
+            const n = a[0] * b[0];
+            const cd = gcd(d, abs(n));
+            return [n / cd, d / cd];
+        }
+
+        function divBigR(a, b) {
+            return multBigR(a, invBigR(b));
+        }
+
+        function decode() {
+            document.getElementById("secret").innerHTML = "";
+
+            var secret = BigR(0n);
+            for (let i = 0; i < shares.length; ++i) {
+                var c0 = BigR(1n);
+                for (let j = 0; j < shares.length; ++j) {
+                    if (i !== j) {
+                        const n = -shares[j][0];
+                        const d = shares[i][0] - shares[j][0];
+                        if (d > 0) {
+                            c0 = multBigR(c0, [n, d]);
+                        } else {
+                            c0 = multBigR(c0, [-n, -d]);
+                        }
+                    }
+                }
+                secret = addBigR(secret, multBigR(BigR(shares[i][1]), c0));
+            }
+
+            if (secret[1] != 1n) {
+                alert("Failed to decode");
+                return;
+            }
+
+            document.getElementById("secret").innerHTML = bitob64(secret[0]);
+        }
+    </script>
+</body>
+</html>
