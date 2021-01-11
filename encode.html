@@ -1,0 +1,180 @@
+<html>
+<head>
+   <title>Shamir's Secret Sharing: Encode</title>
+   <meta charset="UTF-8" />
+</head>
+<body>
+   <h1>Encode a secret using Shamir's Secret Sharing</h1>
+   <p>
+      <textarea rows="20" cols="80" placeholder="Secret in Base64" id="secret"></textarea>
+      <button id="secret-scan">Scan from QR</button>
+   </p>
+   <p>
+      Number of shares:
+      <input type="number" min="2" id="N" value="2"/>
+      <br />
+      Number of shares needed to decode:
+      <input type="number" min="2" id="K" value="1" />
+   </p>
+   <p>
+      Random numbers:
+      <textarea id="randoms" rows="3" cols="80" placeholder="Random numbers used&#x000d;In the form of 123,456,789&#x000d;Or empty to auto generate"></textarea>
+   </p>
+   <p>
+      <button id="encode" onclick="encode()">Encode</button>
+   </p>
+   <p id="result" />
+
+   <script>
+      function b64tobi(str) {
+         try {
+            const binStr = atob(str);
+            var rst = 0n;
+            for (let i = 0; i < binStr.length; ++i) {
+               rst = rst * 256n;
+               rst = rst + BigInt(binStr.charCodeAt(i));
+            }
+            return rst;
+         } catch {
+            return null;
+         }
+      }
+
+      function bitob64(bi) {
+         var bs = [];
+         while (bi > 0n) {
+            const b = bi % 256n;
+            const s = String.fromCharCode(Number(b));
+            bs.unshift(s);
+            bi = bi / 256n;
+         }
+
+         return btoa(bs.join(""));
+      }
+
+      function atobi(str) {
+         try {
+            return BigInt(str);
+         } catch {
+            return null;
+         }
+      }
+
+      /*
+       * We should first find a prime number P that is larger than secret and
+       * make sure all random numbers are less than P. However, finding a large
+       * prime number is hard so we cheat here by using secret if it's large or
+       * a fixed prime.
+       */
+      const A_PRIME = 202398751176054158594234805426330328012021n;
+      function randCoeff(secret) {
+         const P = (secret < A_PRIME)? A_PRIME : secret;
+
+         var w = 0;
+         var b = P;
+         while (b > 0n) {
+            w += 1;
+            b = b / 256n;
+         }
+
+         var arr = new Uint8Array(w);
+         while (1) {
+            crypto.getRandomValues(arr);
+            b = 0n;
+            for (let i = 0; i < w; ++i) {
+               b = b * 256n;
+               b = b + BigInt(arr[i]);
+            }
+
+            if (b < P) {
+               return b;
+            }
+         }
+      }
+
+      function getCoefficients(secret, k) {
+         const str = document.getElementById("randoms").value;
+         if (str == "") {
+            // Generate them
+            var coeff = [secret];
+            for (let i = 1; i < k; ++i) {
+               coeff.push(randCoeff(secret));
+            }
+            return coeff;
+         } else {
+            var coeff;
+            try {
+               coeff = str.split(",").map((s) => BigInt(s));
+            } catch {
+               alert("Invalid random numbers");
+               return null;
+            }
+
+            if (coeff.length != (k - 1)) {
+               alert("Must have exactly " + (k - 1) + " random numbers");
+               return null;
+            }
+
+            for (let c of coeff) {
+               if (c <= 0n) {
+                  alert("Random number must be positive integer");
+                  return null;
+               }
+            }
+
+            coeff.unshift(secret);
+            return coeff;
+         }
+      }
+
+      function poly(coeff, x) {
+         var rst = 0n;
+         for (let i = coeff.length - 1; i >= 0; --i) {
+            rst = rst * x;
+            rst = rst + coeff[i];
+         }
+         return rst;
+      }
+
+      function encode() {
+         const secret = b64tobi(document.getElementById("secret").value);
+         if (secret === null) {
+            alert("Invalid secret");
+            return;
+         }
+
+         const N = parseInt(document.getElementById("N").value);
+         if (isNaN(N) || N < 2) {
+            alert("Invalid number of shares");
+            return;
+         }
+
+         const K = parseInt(document.getElementById("K").value);
+         if (isNaN(K) || K < 2) {
+            alert("Invalid number of shares needed to decode");
+            return;
+         } else if (K > N) {
+            alert("Number of shares needed to decode must be equal or less than total number of shares");
+            return;
+         }
+
+         const coeff = getCoefficients(secret, K);
+         if (coeff === null) {
+            return;
+         }
+
+         var shares = [];
+         for (let i = 1; i <= N; ++i) {
+            shares.push([i, poly(coeff, BigInt(i))]);
+         }
+
+         document.getElementById("result").innerHTML = "";
+         for (let s of shares) {
+            document.getElementById("result").innerHTML += [
+               "<p>", s[0], "|", bitob64(s[1]), "</p>"
+            ].join("");
+         }
+      }
+   </script>
+</body>
+</html>
